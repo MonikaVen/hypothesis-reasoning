@@ -130,11 +130,17 @@ class EvidenceGraph:
         )
 
     def add_hypothesis(self, hypothesis_id: str, text: str) -> None:
+        """Keep every assertion. A reused id with new text does not rewrite the earlier one."""
+        payload_hash = content_hash(text)
+        node_id = f"hyp:{hypothesis_id}"
+        current = self.nodes.get(node_id)
+        if current is not None and current.payload_hash != payload_hash:
+            node_id = f"hyp:{hypothesis_id}:{len(self.nodes)}"
         self._add(
             GraphNode(
-                node_id=f"hyp:{hypothesis_id}",
+                node_id=node_id,
                 kind=NodeKind.HYPOTHESIS,
-                payload_hash=content_hash(text),
+                payload_hash=payload_hash,
                 text=text,
             )
         )

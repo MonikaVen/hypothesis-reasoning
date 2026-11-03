@@ -305,6 +305,9 @@ def test_query_order_pagination_truncation_and_parser_failures():
     assert len(truncated.records) == 1
     rejected = service.execute("aggregate_events", {"group_by": "source; drop table events"})
     assert rejected.status.value == "failed_tool"
+    invented = service.execute("search_events", {"query": "outbound"})
+    assert invented.status.value == "failed_tool"
+    assert invented.error is not None and "unknown parameters: query" in invented.error
     counted = QueryService(records).execute("aggregate_events", {"group_by": "source"})
     assert "netflow\t1" in counted.summary
 
@@ -328,6 +331,11 @@ def test_graph_edges_are_assertions_and_observations_are_immutable():
     graph.add_observation("flow-1", "flow", "hash-a")
     with pytest.raises(CapabilityError):
         graph.add_observation("flow-1", "changed", "hash-b")
+    graph.add_hypothesis("h1", "scheduled job")
+    graph.add_hypothesis("h1", "scheduled job")
+    graph.add_hypothesis("h1", "unscheduled curl")
+    assert "hyp:h1" in graph.nodes
+    assert any(node_id.startswith("hyp:h1:") for node_id in graph.nodes)
     graph.add_edge("hyp:h1", "obs:flow-1", "support", "agent")  # type: ignore[arg-type]
     assert graph.edges[0].script_validated is False
     assert not hasattr(graph.edges[0], "relation_true")

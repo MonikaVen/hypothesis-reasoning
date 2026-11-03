@@ -2,7 +2,7 @@
 
 Experiment harness for the pre-results protocol *Beyond Retrieval: Evaluating Hypothesis-Driven Reasoning in Tool-Using Agents*.
 
-The harness separates evidence acquisition, interpretation, and revision, and it freezes those boundaries before any confirmatory model run. It does not download AIT, OTRF, or OpTC, and it does not call a model. A synthetic outbound-transfer case exercises the runner. Those rows are a harness check, not a study result.
+The harness separates evidence acquisition, interpretation, and revision, and it freezes those boundaries before any confirmatory model run. It does not download AIT, OTRF, or OpTC. A synthetic outbound-transfer case exercises the runner. Those rows are a harness check, not a study result.
 
 The design is in [docs/architecture.md](docs/architecture.md).
 
@@ -34,6 +34,15 @@ python -m beyond_retrieval run --backend openai --experiment pilot --out runs/mo
 
 `BR_API_KEY` may also be named `OPENAI_API_KEY`. The key is not written into run records. `dry-run` still replays the scripted harness check.
 
+Groq uses the same chat-completions shape. Groq decommissioned `deepseek-r1-distill-llama-70b`. The default model is the replacement still on the account, `openai/gpt-oss-120b`.
+
+```bash
+export GROQ_API_KEY=...    # or BR_API_KEY; never commit this
+python -m beyond_retrieval run --backend groq --experiment pilot --out runs/groq-pilot
+```
+
+Pass `--model qwen/qwen3.8-27b` to use another id from the account's model list. `BR_BASE_URL` overrides the host when it is set.
+
 ## What is implemented
 
 - Case manifests, environment splits, and lesson freeze
@@ -46,7 +55,7 @@ python -m beyond_retrieval run --backend openai --experiment pilot --out runs/mo
 
 ## What is not implemented
 
-Real dataset parsers, model clients, human adjudication UI, and Kyoushi regeneration. Those are extension points in the architecture doc. Filling a result table before a sealed run is intentionally unsupported: `unmeasured_main_table()` stays blank.
+Real dataset parsers, a human adjudication UI, and Kyoushi regeneration. Those are extension points in the architecture doc. Filling a result table before a sealed run is intentionally unsupported: `unmeasured_main_table()` stays blank.
 
 ## License
 

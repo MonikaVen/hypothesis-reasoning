@@ -171,6 +171,71 @@ def test_hosted_backend_requires_a_key(monkeypatch: pytest.MonkeyPatch):
         OpenAICompatibleBackend.from_env()
 
 
+def test_groq_backend_targets_groq_and_keeps_the_key_out_of_the_name(monkeypatch: pytest.MonkeyPatch):
+    captured: dict[str, object] = {}
+
+    def transport(url: str, headers: dict[str, str], payload: dict[str, object], timeout: float) -> dict[str, object]:
+        captured["url"] = url
+        captured["json_object"] = payload.get("response_format")
+        captured["reasoning_effort"] = payload.get("reasoning_effort")
+        captured["authorization"] = headers["Authorization"]
+        return {
+            "choices": [{"message": {"content": "", "reasoning": "<think>draft</think>{\"kind\": \"stop\"}"}}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 2},
+        }
+
+    monkeypatch.setenv("GROQ_API_KEY", "gsk-test-secret")
+    monkeypatch.delenv("BR_MODEL", raising=False)
+    monkeypatch.delenv("BR_BASE_URL", raising=False)
+    backend = OpenAICompatibleBackend.for_groq(transport=transport)
+    completion = backend.complete([{"role": "user", "content": "hello"}])
+    assert backend.name == "groq:openai/gpt-oss-120b"
+    assert backend.model == "openai/gpt-oss-120b"
+    assert captured["url"] == "https://api.groq.com/openai/v1/chat/completions"
+    assert captured["authorization"] == "Bearer gsk-test-secret"
+    assert captured["json_object"] == {"type": "json_object"}
+    assert captured["reasoning_effort"] == "low"
+    assert "gsk-test-secret" not in backend.name
+    assert "gsk-test-secret" not in completion.text
+    assert proposal_from_json(completion.text, Capabilities.for_condition(ConditionId.A)).kind.value == "stop"
+
+
+def test_groq_backend_retries_a_rate_limit(monkeypatch: pytest.MonkeyPatch):
+    import io
+    import urllib.error
+
+    calls = {"n": 0}
+
+    def transport(url: str, headers: dict[str, str], payload: dict[str, object], timeout: float) -> dict[str, object]:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise urllib.error.HTTPError(
+                url,
+                429,
+                "Too Many Requests",
+                hdrs=None,
+                fp=io.BytesIO(b'{"error":{"message":"try again in 0.01s"}}'),
+            )
+        return {
+            "choices": [{"message": {"content": "{\"kind\": \"stop\"}"}}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+        }
+
+    monkeypatch.setenv("GROQ_API_KEY", "gsk-test-secret")
+    backend = OpenAICompatibleBackend.for_groq(model="openai/gpt-oss-20b", transport=transport)
+    completion = backend.complete([{"role": "user", "content": "hello"}])
+    assert calls["n"] == 2
+    assert completion.text == '{"kind": "stop"}'
+
+
+def test_groq_backend_requires_a_key(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("BR_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    with pytest.raises(MissingCredentials):
+        OpenAICompatibleBackend.for_groq()
+
+
 def test_script_campaign_validates_only_the_full_method(tmp_path: Path):
     records = run_campaign(experiment="scripts", out=tmp_path, clock=ManualClock())
     by_condition = {item.spec.condition: item for item in records}

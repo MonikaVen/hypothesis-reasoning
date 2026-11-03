@@ -34,8 +34,12 @@ def main(argv: list[str] | None = None) -> int:
     dry = sub.add_parser("dry-run", help="Run the scripted harness check")
     dry.add_argument("--out", default="runs/dry-run", help="Directory for run records")
     live = sub.add_parser("run", help="Execute the synthetic campaign")
-    live.add_argument("--backend", choices=("local", "openai"), default="local")
-    live.add_argument("--model", default=None, help="Hosted model name. Defaults to BR_MODEL or gpt-4o-mini.")
+    live.add_argument("--backend", choices=("local", "openai", "groq"), default="local")
+    live.add_argument(
+        "--model",
+        default=None,
+        help="Hosted model id. OpenAI defaults to gpt-4o-mini. Groq defaults to openai/gpt-oss-120b.",
+    )
     live.add_argument("--experiment", choices=tuple(EXPERIMENTS), default="pilot")
     live.add_argument("--repeats", type=int, default=1)
     live.add_argument("--out", default="runs/pilot", help="Directory for run records")
@@ -67,9 +71,12 @@ def _print_plan() -> None:
 
 def _run(args: argparse.Namespace) -> int:
     backend = None
-    if args.backend == "openai":
+    if args.backend in {"openai", "groq"}:
         try:
-            backend = OpenAICompatibleBackend.from_env(model=args.model)
+            if args.backend == "groq":
+                backend = OpenAICompatibleBackend.for_groq(model=args.model)
+            else:
+                backend = OpenAICompatibleBackend.from_env(model=args.model)
         except MissingCredentials as exc:
             print(exc)
             return 2

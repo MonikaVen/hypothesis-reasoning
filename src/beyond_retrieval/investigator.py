@@ -11,6 +11,7 @@ and the final answer. Contract repairs still happen in the runner.
 from __future__ import annotations
 
 import json
+import re
 from typing import Protocol
 
 from beyond_retrieval.models import (
@@ -27,6 +28,7 @@ from beyond_retrieval.models import (
     ToolResult,
     Verdict,
 )
+from beyond_retrieval.tools import TOOL_SCHEMA
 
 COUNT_SCRIPT = """
 import json, sqlite3, sys
@@ -519,14 +521,25 @@ def _any_ids(records: list[AgentRecord]) -> list[str]:
 def _system_prompt(capabilities: Capabilities) -> str:
     script = "You may return kind script with script_source when a count or join is useful." if capabilities.custom_scripts else "Do not write scripts."
     contract = (
-        "Every query and script needs a contract with two hypotheses and different predicted_observation strings."
+        "Every query and script needs a contract. Copy the same tool and parameters onto the contract. "
+        "Include two hypotheses with different predicted_observation strings, plus non-empty discrimination "
+        "and resource_estimate. contract.tool must equal the action tool."
         if capabilities.action_contracts
         else "Do not include a contract."
     )
+    params = {
+        name: spec["params"]
+        for name, spec in TOOL_SCHEMA.items()
+        if isinstance(spec, dict) and isinstance(spec.get("params"), list)
+    }
     return (
         "You are investigating a security case through a read-only query service. "
         "Use only tool results. Do not invent record ids. "
         f"{script} {contract} "
+        "Call list_sources before searching. search_events has no free-text query. "
+        "Match source, event_type, or entity_key plus entity_value. "
+        "aggregate_events group_by is only source, event_type, or parser_status. "
+        f"Allowed parameters: {json.dumps(params, sort_keys=True)}. "
         "Action JSON fields: kind, tool, parameters, falsification_check, "
         "contract {question, hypotheses[{hypothesis_id, explanation, predicted_observation}], "
         "open_set_alternative, tool, parameters, discrimination, resource_estimate}, "
@@ -549,12 +562,20 @@ def _task_prompt(view: TaskView) -> str:
     )
 
 
+_THINK_BLOCK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+
+
 def _extract_json(text: str) -> dict[str, object]:
-    start = text.find("{")
-    end = text.rfind("}")
+    cleaned = _THINK_BLOCK.sub("", text)
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start < 0 or end <= start:
+        start = text.find("{")
+        end = text.rfind("}")
+        cleaned = text
     if start < 0 or end <= start:
         raise ValueError("no JSON object")
-    payload = json.loads(text[start : end + 1])
+    payload = json.loads(cleaned[start : end + 1])
     if not isinstance(payload, dict):
         raise ValueError("JSON value must be an object")
     return payload

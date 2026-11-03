@@ -61,6 +61,12 @@ class QueryService:
     def execute(self, tool: str, parameters: dict[str, object]) -> ToolResult:
         if tool not in QUERY_TOOLS:
             return _failed(f"unknown tool {tool}")
+        allowed = TOOL_SCHEMA.get(tool, {}).get("params")
+        if isinstance(allowed, list):
+            unknown = sorted(set(parameters) - set(allowed))
+            if unknown:
+                listed = ", ".join(str(name) for name in allowed) or "(none)"
+                return _failed(f"unknown parameters: {', '.join(unknown)}. allowed: {listed}")
         try:
             if tool == "list_sources":
                 return self._list_sources()
