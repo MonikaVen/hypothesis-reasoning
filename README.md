@@ -14,10 +14,25 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 pytest
 python -m beyond_retrieval plan
-python -m beyond_retrieval dry-run --out runs/dry-run
+python -m beyond_retrieval run --backend local --experiment pilot --out runs/pilot
 ```
 
-`plan` prints the protocol's run ceilings (9,600 core grid, 11,952 planned ceiling, pilots, and the optional regenerated cohort). `dry-run` writes one synthetic V0/V4 walk for conditions A and H. Evidence-supported resolution stays `pending_adjudication` until a blinded review is attached.
+`plan` prints the protocol's run ceilings. `run` executes the synthetic case through the real runner.
+
+`--backend local` is a deterministic tool user. It searches every visible source and answers from the rows it retrieved. It does not call a model, and its records are not a confirmatory result. Evidence-supported resolution stays `pending_adjudication` until a blinded review is attached.
+
+`--experiment pilot` is V0 and V4 for conditions A and H. `scripts` adds AS and HS on V0. `synthetic` walks V0, V1, V2, V4, and V5 for A, H, AS, and HS.
+
+A hosted model uses the OpenAI chat-completions shape:
+
+```bash
+export BR_API_KEY=...
+export BR_MODEL=gpt-4o-mini          # optional
+export BR_BASE_URL=https://api.openai.com/v1   # optional; any compatible host
+python -m beyond_retrieval run --backend openai --experiment pilot --out runs/model-pilot
+```
+
+`BR_API_KEY` may also be named `OPENAI_API_KEY`. The key is not written into run records. `dry-run` still replays the scripted harness check.
 
 ## What is implemented
 

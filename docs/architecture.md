@@ -155,6 +155,16 @@ ESR is `pending_adjudication` until `apply_adjudication`. A pass requires the me
 
 **Representation experiment.** `memory.render_representation` renders one fact list as a ledger, a relation list, or a typed graph. Every rendering emits the same fact ids. `corrupt_edges` swaps or deletes 0, 10, or 20 percent of derived edges and leaves them marked derived. It is not on the E1 path.
 
+## Executing a campaign
+
+`campaign.run_campaign` is the path that produces run records.
+
+`python -m beyond_retrieval run --backend local` builds one `LocalInvestigator` per spec. That investigator calls `list_sources`, searches each returned source, and, for AS and HS, runs one counting script. H and HS attach action contracts. The final answer is derived from retrieved rows. Claim prompts on the task view name the required finding ids and the question for each. They do not contain the gold sentence stored on the rubric.
+
+`python -m beyond_retrieval run --backend openai` uses `ModelInvestigator` and `OpenAICompatibleBackend`. The backend reads `BR_API_KEY` or `OPENAI_API_KEY`, `BR_MODEL`, and `BR_BASE_URL`. Each step asks for one JSON action. A malformed reply is sent back once. Contract rejection still belongs to the runner and still consumes budget. Token counts from the provider are stored on the step.
+
+The synthetic case is the only corpus wired into `run`. A new corpus is a `CaseBundle` plus answer-free `claim_prompts`. Confirmatory grids stay unsealed until the protocol freeze is sealed, so this command does not flip the confirmatory bit.
+
 ## Synthetic harness
 
 `fixtures.outbound_case` is the appendix's ambiguous outbound transfer, with made-up rows: a flow, a translation, a `curl` process, and a backup job on a different host and window. V4 removes the translation and the process, which are the two modeled paths to the internal host. The dry run walks conditions A and H on V0 and V4 with a frozen clock and no model. Use it to see a trace. Do not cite it as evidence about agents.

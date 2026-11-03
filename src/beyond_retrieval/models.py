@@ -531,6 +531,13 @@ class CaseRecord(FrozenModel):
     alert: str
 
 
+class ClaimPrompt(FrozenModel):
+    """A required claim the agent must answer. The prompt does not contain the gold text."""
+
+    finding_id: str
+    prompt: str
+
+
 class CaseBundle(FrozenModel):
     """Full curator object. Never pass this to a policy."""
 
@@ -544,6 +551,7 @@ class CaseBundle(FrozenModel):
     eligible_variants: tuple[Variant, ...] = (Variant.V0,)
     provisional_rubric: Rubric | None = None
     leak_markers: tuple[str, ...] = ()
+    claim_prompts: dict[str, tuple[ClaimPrompt, ...]] = Field(default_factory=dict)
 
 
 class TaskView(FrozenModel):
@@ -556,6 +564,7 @@ class TaskView(FrozenModel):
     guidance_text: str
     variant: Variant
     mode: RunMode
+    claims: tuple[ClaimPrompt, ...] = ()
 
 
 class RunSpec(FrozenModel):

@@ -6,6 +6,8 @@ import argparse
 import json
 from pathlib import Path
 
+from beyond_retrieval.backends import MissingCredentials, OpenAICompatibleBackend
+from beyond_retrieval.campaign import EXPERIMENTS, run_campaign
 from beyond_retrieval.fixtures import domain_reference, investigation_policy, outbound_case
 from beyond_retrieval.grid import (
     e1_ceiling,
@@ -29,12 +31,20 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="beyond-retrieval")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("plan", help="Print the protocol's run ceilings")
-    dry = sub.add_parser("dry-run", help="Run the synthetic harness check")
+    dry = sub.add_parser("dry-run", help="Run the scripted harness check")
     dry.add_argument("--out", default="runs/dry-run", help="Directory for run records")
+    live = sub.add_parser("run", help="Execute the synthetic campaign")
+    live.add_argument("--backend", choices=("local", "openai"), default="local")
+    live.add_argument("--model", default=None, help="Hosted model name. Defaults to BR_MODEL or gpt-4o-mini.")
+    live.add_argument("--experiment", choices=tuple(EXPERIMENTS), default="pilot")
+    live.add_argument("--repeats", type=int, default=1)
+    live.add_argument("--out", default="runs/pilot", help="Directory for run records")
     args = parser.parse_args(argv)
     if args.command == "plan":
         _print_plan()
         return 0
+    if args.command == "run":
+        return _run(args)
     _dry_run(Path(args.out))
     return 0
 
@@ -53,6 +63,38 @@ def _print_plan() -> None:
     print(f"Optional regenerated pairs, outside the ceiling: {optional_regeneration_runs()}")
     print("Actual E1 size is 4 conditions × 2 backbones × 3 repeats × eligible case-versions.")
     print("Ineligible variants are omitted. They are not scored as failures.")
+
+
+def _run(args: argparse.Namespace) -> int:
+    backend = None
+    if args.backend == "openai":
+        try:
+            backend = OpenAICompatibleBackend.from_env(model=args.model)
+        except MissingCredentials as exc:
+            print(exc)
+            return 2
+    out = Path(args.out)
+    print(
+        f"Running {args.experiment} with "
+        f"{'local-baseline' if backend is None else backend.name}. "
+        "ESR stays pending adjudication."
+    )
+    records = run_campaign(
+        experiment=args.experiment,
+        out=out,
+        backend=backend,
+        repeats=args.repeats,
+    )
+    for record in records:
+        mechanical = "pending" if record.mechanical is None else str(record.mechanical.passed).lower()
+        esr = "none" if record.esr is None else record.esr.status
+        print(
+            f"{record.spec.variant.value} {record.spec.condition.value} "
+            f"r{record.spec.repeat_index}: status={record.status.value} "
+            f"mechanical={mechanical} esr={esr} calls={record.budget.tool_calls}"
+        )
+    print(f"Wrote records under {out}")
+    return 0
 
 
 def _dry_run(out: Path) -> None:

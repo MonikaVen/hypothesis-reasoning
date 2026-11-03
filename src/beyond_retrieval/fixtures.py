@@ -12,6 +12,7 @@ from beyond_retrieval.models import (
     Capabilities,
     CaseBundle,
     CaseRecord,
+    ClaimPrompt,
     ConditionId,
     DomainReference,
     EntityMapping,
@@ -113,7 +114,36 @@ def outbound_case() -> CaseBundle:
         eligible_variants=(Variant.V0, Variant.V1, Variant.V2, Variant.V4, Variant.V5),
         provisional_rubric=_gap_rubric(Variant.V5, stage="provisional"),
         leak_markers=("ATTACK_LABEL_EXFIL",),
+        claim_prompts=_claim_prompts(),
     )
+
+
+def _claim_prompts() -> dict[str, tuple[ClaimPrompt, ...]]:
+    full = (
+        ClaimPrompt(
+            finding_id="F_HOST",
+            prompt="Identify the internal host that originated the transfer and cite the records that link it to the flow.",
+        ),
+        ClaimPrompt(
+            finding_id="F_PROC",
+            prompt="Identify the initiating process and account, and cite the records that show them.",
+        ),
+        ClaimPrompt(
+            finding_id="F_AUTH",
+            prompt="State whether a scheduled job authorizes this transfer, and cite the records used.",
+        ),
+    )
+    gap = (
+        ClaimPrompt(
+            finding_id="F_FLOW",
+            prompt="Describe the outbound transfer that is visible and cite its record.",
+        ),
+        ClaimPrompt(
+            finding_id="F_GAP",
+            prompt="State whether the internal host and initiating process can be determined from the accessible records.",
+        ),
+    )
+    return {"V0": full, "V2": full, "V4": gap, "V5:stage1": gap, "V5:stage2": full}
 
 
 def entity_mapping() -> EntityMapping:

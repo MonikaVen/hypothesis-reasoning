@@ -196,7 +196,7 @@ def _v5(spec, case, policy, protocol, guidance, capabilities, clock, started, gr
     mount1 = prepare_mount(case, Variant.V5, spec.seed, stage="stage1")
     first = _loop(
         policy, case, capabilities, mount1, caps, protocol.query_limits, clock, graph,
-        guidance, spec, script_validator, workspace, raise_infra,
+        guidance, spec, script_validator, workspace, raise_infra, stage="stage1",
     )
     provisional = first.answer
     provisional_mechanical = _score(first, rubric_for(case, Variant.V5, stage="stage1"), mount1.ids())
@@ -213,7 +213,7 @@ def _v5(spec, case, policy, protocol, guidance, capabilities, clock, started, gr
     mount2 = prepare_mount(case, Variant.V5, spec.seed, stage="stage2")
     second = _loop(
         policy, case, capabilities, mount2, caps, protocol.query_limits, clock, graph,
-        guidance, spec, script_validator, workspace, raise_infra,
+        guidance, spec, script_validator, workspace, raise_infra, stage="stage2",
     )
     combined = _combine(first, second)
     mechanical = _score(combined, rubric_for(case, Variant.V5, stage="stage2"), mount2.ids())
@@ -239,10 +239,11 @@ def _loop(
     script_validator: ScriptValidator | None,
     workspace: Path | None,
     raise_infra: bool,
+    stage: str | None = None,
 ) -> _LoopResult:
     result = _LoopResult()
     result.budget = Budget(caps)
-    view = _view(case, spec, guidance, tools=allowed_tools(capabilities))
+    view = _view(case, spec, guidance, tools=allowed_tools(capabilities), stage=stage)
     try:
         policy.start(view)
     except Exception:
@@ -507,7 +508,13 @@ def _record(
     )
 
 
-def _view(case: CaseBundle, spec: RunSpec, guidance: str, tools: tuple[str, ...]) -> TaskView:
+def _view(
+    case: CaseBundle,
+    spec: RunSpec,
+    guidance: str,
+    tools: tuple[str, ...],
+    stage: str | None = None,
+) -> TaskView:
     return TaskView(
         case_id=case.record.case_id,
         question=case.record.question,
@@ -516,7 +523,19 @@ def _view(case: CaseBundle, spec: RunSpec, guidance: str, tools: tuple[str, ...]
         guidance_text=guidance,
         variant=spec.variant,
         mode=spec.mode,
+        claims=_claim_prompts(case, spec.variant, stage),
     )
+
+
+def _claim_prompts(case: CaseBundle, variant: Variant, stage: str | None) -> tuple:
+    """Agent-visible questions. Gold rubric sentences stay on the bundle."""
+    if variant is Variant.V5:
+        key = "V5:stage1" if stage == "stage1" else "V5:stage2"
+    elif variant is Variant.V1:
+        key = Variant.V0.value
+    else:
+        key = variant.value
+    return tuple(case.claim_prompts.get(key, ()))
 
 
 def _step(
